@@ -84,7 +84,8 @@ begin
     prev_version_id = @server.call("ccollab3.versionCreate", file_changelist_id, SVN_PREFIX + file[:filename], '', commit_revision, 'A', 'C')
     content = `git show #{@commit_hash}:#{file[:filename]}`
     content_md5 = Digest::MD5.hexdigest(content)
-    @server.call("ccollab3.versionSetContentByMd5", prev_version_id, content_md5)
+    found = @server.call("ccollab3.versionSetContentByMd5", prev_version_id, content_md5)
+    @server.call("ccollab3.versionSetContent", prev_version_id, XMLRPC::Base64.new(content)) if !found
     @server.call("ccollab3.save", 'com.smartbear.ccollab.datamodel.VersionData', {
       'changelistId' => file_changelist_id, 'changeType' => 'A', 'prevVersionId' => 0, 'contentMd5' => content_md5,
       'id' => prev_version_id, 'scmVersionName' => commit_revision, 'localFilePath' => '', 'localType' => 'C',
