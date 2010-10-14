@@ -52,7 +52,7 @@ begin
     review_id = ARGV.shift.to_i 
   end
 
-  @commit_hash = 'master' #`git svn dcommit -n | head -2 | tail -1`.split[1]
+  @commit_hash = `git svn dcommit -n | head -2 | tail -1`.split[1]
   @files = find_files
  
   @server = XMLRPC::Client.new(CC_URI.host, "/xmlrpc/server", CC_URI.port)
