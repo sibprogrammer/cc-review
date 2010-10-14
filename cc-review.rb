@@ -56,7 +56,7 @@ begin
   @files = find_files
  
   @server = XMLRPC::Client.new(CC_URI.host, "/xmlrpc/server", CC_URI.port)
-  @server.set_debug if 1 == ENV['CC_DEBUG']
+  @server.set_debug if '1' == ENV['CC_DEBUG']
 
   version = @server.call("ccollab3.getServerVersion")
   raise "Unknown server version #{version}" if SUPPORTED_SERVER_VERISON != version
