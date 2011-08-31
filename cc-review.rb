@@ -13,7 +13,7 @@ CLIENT_GUID = `cat ~/.smartbear/com.smartbear.ccollab.client.txt | grep clientgu
 REPO_ROOT = `git svn info | grep "Repository Root:"`.split.last
 REPO_UUID = `git svn info | grep "Repository UUID:"`.split.last
 REPO_URL = `git svn info | grep "URL:"`.split.last
-SVN_PREFIX = REPO_URL.sub(REPO_ROOT, '')
+SVN_PREFIX = REPO_URL.sub(REPO_ROOT, '').chomp('/') + '/'
 LOCAL_GUID = Digest::MD5.hexdigest(Time.now.to_f.to_s)
 
 def find_files
