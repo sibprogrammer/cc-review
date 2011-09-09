@@ -24,7 +24,7 @@ def find_files
     `git diff-index #{@commit_hash}`.split("\n").each do |line|
       file_info = line.split
       files << { :action_type => file_info[4], :filename => file_info[5] }
-      raise "Unsupported action type: #{file_info[4]}" if 'M' != file_info[4]
+      raise "Unsupported action type: #{file_info[4]}" if 'M' != file_info[4] && 'A' != file_info[4]
     end
   else
     ARGV.each { |file| files << { :action_type => 'M', :filename => file } }
@@ -75,39 +75,61 @@ begin
 
   @files.each do |file|
     puts "Uploading file #{file[:filename]}..."
-    last_commit_info = `git svn log --limit 1 #{file[:filename]} | head -2 | tail -1`.chomp.split(" | ")
-    commit_revision = last_commit_info[0].gsub(/[^\d]/, '\1')
-    author = last_commit_info[1]
-    time = Time.parse(last_commit_info[2])
+
+    prev_version_id = 0
+
+    if 'M' == file[:action_type]
+      initial_file = file[:filename]
+      last_commit_info = `git svn log --limit 1 #{initial_file} | head -2 | tail -1`.chomp.split(" | ")
+      commit_revision = last_commit_info[0].gsub(/[^\d]/, '\1')
+      author = last_commit_info[1]
+      time = Time.parse(last_commit_info[2])
+    else
+      commit_revision = ''
+      author = `whoami`.chop
+      time = Time.now
+    end
+
     file_changelist_id = @server.call("ccollab3.changelistCreate", commit_revision, scm_id, '', time, author, 'fake comment', CLIENT_GUID)
 
-    prev_version_id = @server.call("ccollab3.versionCreate", file_changelist_id, SVN_PREFIX + file[:filename], '', commit_revision, 'A', 'C')
-    content = `git show #{@commit_hash}:#{file[:filename]}`
-    content_md5 = Digest::MD5.hexdigest(content)
-    found = @server.call("ccollab3.versionSetContentByMd5", prev_version_id, content_md5)
-    @server.call("ccollab3.versionSetContent", prev_version_id, XMLRPC::Base64.new(content)) if !found
-    @server.call("ccollab3.save", 'com.smartbear.ccollab.datamodel.VersionData', {
-      'changelistId' => file_changelist_id, 'changeType' => 'A', 'prevVersionId' => 0, 'contentMd5' => content_md5,
-      'id' => prev_version_id, 'scmVersionName' => commit_revision, 'localFilePath' => '', 'localType' => 'C',
-      'filePath' => SVN_PREFIX + file[:filename]
-    })
+    if 'M' == file[:action_type]
+      prev_version_id = @server.call("ccollab3.versionCreate", file_changelist_id, SVN_PREFIX + file[:filename], '', commit_revision, 'A', 'C')
+      content = `git show #{@commit_hash}:#{file[:filename]}`
+      content_md5 = Digest::MD5.hexdigest(content)
+      found = @server.call("ccollab3.versionSetContentByMd5", prev_version_id, content_md5)
+      @server.call("ccollab3.versionSetContent", prev_version_id, XMLRPC::Base64.new(content)) if !found
+      @server.call("ccollab3.save", 'com.smartbear.ccollab.datamodel.VersionData', {
+        'changelistId' => file_changelist_id, 'changeType' => 'A', 'prevVersionId' => 0, 'contentMd5' => content_md5,
+        'id' => prev_version_id, 'scmVersionName' => commit_revision, 'localFilePath' => '', 'localType' => 'C',
+        'filePath' => SVN_PREFIX + file[:filename]
+      })
+    end
 
-    commit_revision = `git svn info #{file[:filename]} | grep "Revision:"`.split.last
+    if 'M' == file[:action_type]
+      commit_revision = `git svn info #{file[:filename]} | grep "Revision:"`.split.last
+    else
+      commit_revision = '0'
+    end
+
     version_id = @server.call("ccollab3.versionCreate", local_changelist_id, SVN_PREFIX + file[:filename],
-      File.expand_path(file[:filename]), commit_revision, 'M', 'L'
+      File.expand_path(file[:filename]), commit_revision, file[:action_type], 'L'
     )
-    @server.call("ccollab3.save", 'com.smartbear.ccollab.datamodel.VersionData', {
-      'changelistId' => local_changelist_id, 'changeType' => 'M', 'prevVersionId' => prev_version_id, 'contentMd5' => '',
-      'id' => version_id, 'scmVersionName' => commit_revision, 'localFilePath' => File.expand_path(file[:filename]), 'localType' => 'L',
-      'filePath' => SVN_PREFIX + file[:filename]
-    })
+
+    if 'M' == file[:action_type]
+      @server.call("ccollab3.save", 'com.smartbear.ccollab.datamodel.VersionData', {
+        'changelistId' => local_changelist_id, 'changeType' => 'M', 'prevVersionId' => prev_version_id, 'contentMd5' => '',
+        'id' => version_id, 'scmVersionName' => commit_revision, 'localFilePath' => File.expand_path(file[:filename]), 'localType' => 'L',
+        'filePath' => SVN_PREFIX + file[:filename]
+      })
+    end
+
     content = `cat #{file[:filename]}`
     content_md5 = Digest::MD5.hexdigest(content)
     @server.call("ccollab3.versionSetContentByMd5", version_id, content_md5)
     @server.call("ccollab3.versionSetContent", version_id, XMLRPC::Base64.new(content))
 
     @server.call("ccollab3.save", 'com.smartbear.ccollab.datamodel.VersionData', {
-      'changelistId' => local_changelist_id, 'changeType' => 'M', 'prevVersionId' => prev_version_id, 'contentMd5' => content_md5,
+      'changelistId' => local_changelist_id, 'changeType' => file[:action_type], 'prevVersionId' => prev_version_id, 'contentMd5' => content_md5,
       'id' => version_id, 'scmVersionName' => commit_revision, 'localFilePath' => File.expand_path(file[:filename]), 'localType' => 'L',
       'filePath' => SVN_PREFIX + file[:filename]
     })
