@@ -21,10 +21,10 @@ def find_files
   puts "Files for review:"
 
   if ARGV.empty?
-    `git diff-index #{@commit_hash}`.split("\n").each do |line|
+    `git diff-index master`.split("\n").each do |line|
       file_info = line.split
       files << { :action_type => file_info[4], :filename => file_info[5] }
-      raise "Unsupported action type: #{file_info[4]}" if 'M' != file_info[4] && 'A' != file_info[4]
+      raise "Unsupported action type: #{file_info[4]}" unless ['M', 'A'].include?(file_info[4])
     end
   else
     ARGV.each { |file| files << { :action_type => 'M', :filename => file } }
